@@ -224,7 +224,7 @@ if st.button('Predict Dropout Risk'):
     st.write(f"Dựa vào dữ liệu được cung cấp ở trên, thì mức độ rủi ro mà sinh viên này bỏ học là: {'**Thấp**' if prediction[0] == 1 else '**Cao**'}")
     
 st.header('Feedback')
-st.write('Bạn thấy kỹ thuật máy học nào là triển vọng nhất cho việc dự đoán tỷ lệ sinh viên bỏ học? Chia sẻ suy nghĩ hoặc kinh nghiệm của bạn.')
+st.write('Bạn thấy dự đoán bị sai? vui lòng phản hồi ở dưới :).')
 
 # Feedback form (simplified version)
 user_feedback = st.text_area("Nhập phản hồi của bạn ở đây")
