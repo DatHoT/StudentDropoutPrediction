@@ -170,7 +170,7 @@ local_cultural_level = st.radio('Trình độ văn hóa, văn minh nơi bạn s�
 continuing_education = st.radio('Bạn có tiếp tục học ở trường không ?', ('Có', 'Không', 'Đang cân nhắc thêm'))
 
 # Text input for multiple-choice question where users can specify reasons affecting their choices
-survey_impact_reasons = st.text_area('Trong các câu khảo sát ở trước (Câu 1->30) thì đâu là những lý do ảnh hưởng tới lựa chọn của bạn ?')
+#survey_impact_reasons = st.text_area('Trong các câu khảo sát ở trước (Câu 1->30) thì đâu là những lý do ảnh hưởng tới lựa chọn của bạn ?')
 
 if st.button('Predict Dropout Risk'):
     # Map the user inputs to the expected model input format
