@@ -2,9 +2,16 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.metrics import accuracy_score
 from sklearn import svm, linear_model, tree, neighbors
+from sklearn.impute import SimpleImputer
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.neighbors import KNeighborsClassifier
 import matplotlib.pyplot as plt
 
 # Title and Introduction
@@ -17,35 +24,71 @@ Trang web được sinh ra để so sánh bốn kỹ thuật máy học— Suppe
 
 @st.cache_data
 def prepare_data_and_evaluate_models():
-    data = pd.read_csv('tweaked_dataset1.csv')
-    X = data.drop('target', axis=1)
-    y = data['target']
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    # Standardize features by removing the mean and scaling to unit variance
-    scaler = StandardScaler()
-    X_train_scaled = scaler.fit_transform(X_train)
-    X_test_scaled = scaler.transform(X_test)
-
-    # Define models
+    data = pd.read_csv('D:\\WorknStudy\\DoAnThue\\AnhThuan\\MYResult.csv')
+    
+    # Display the first few rows of the dataframe to understand its structure
+    data.head()
+    
+    # Define categorical and numeric features
+    categorical_features = data.select_dtypes(include=['object', 'bool']).drop(['Dropout'], axis=1).columns
+    numeric_features = data.select_dtypes(include=['float64', 'int64']).columns
+    
+    # Create transformers for numeric and categorical data
+    numeric_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='median')),  # Impute missing values with median
+        ('scaler', StandardScaler())  # Scale data
+    ])
+    
+    categorical_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='constant', fill_value='missing')),  # Impute missing values with 'missing'
+        ('onehot', OneHotEncoder(handle_unknown='ignore'))  # One-hot encode categorical data
+    ])
+    
+    # Combine transformers into a ColumnTransformer
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', numeric_transformer, numeric_features),
+            ('cat', categorical_transformer, categorical_features)
+        ])
+    
+    # Prepare the target variable
+    y = data['Dropout']
+    
+    # Prepare feature matrix
+    X = data.drop('Dropout', axis=1)
+    
+    # Split the data into training and validation sets
+    X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    # Initialize models with default settings
     models = {
-        'SVM': svm.SVC(C=0.1, gamma="scale", kernel="linear"),
-        'Logistic Regression': linear_model.LogisticRegression(C=0.1),
-        'Decision Tree': tree.DecisionTreeClassifier(max_depth=10),
-        'K-Nearest Neighbors': neighbors.KNeighborsClassifier(n_neighbors=9, weights="uniform"),
+        'SVM': SVC(random_state=42),
+        'Logistic Regression': LogisticRegression(random_state=42),
+        'Decision Tree': DecisionTreeClassifier(random_state=42),
+        'K-Nearest Neighbors': KNeighborsClassifier()
     }
-
-    # Train and evaluate models
+    
+    # Train and evaluate each model
     results = {}
     for name, model in models.items():
-        model.fit(X_train_scaled, y_train)
-        predictions = model.predict(X_test_scaled)
-        accuracy = accuracy_score(y_test, predictions)
+        # Create a full pipeline with preprocessing and the model
+        pipeline = Pipeline(steps=[('preprocessor', preprocessor), ('model', model)])
+        
+        # Train the model
+        pipeline.fit(X_train, y_train)
+        
+        # Predict on the validation set
+        y_pred = pipeline.predict(X_valid)
+        
+        # Calculate accuracy
+        accuracy = accuracy_score(y_valid, y_pred)
         results[name] = accuracy
-
+    
     # Identify the best model based on accuracy
     best_model_name, best_model_instance = max(models.items(), key=lambda x: results[x[0]])
     
-    return results, scaler, best_model_instance
+    return results, preprocessor, best_model_instance
+
 
 # Call the function and output the results, scaler, and best model instance
 results, scaler, best_model_instance = prepare_data_and_evaluate_models()
@@ -130,99 +173,127 @@ st.header('Interactive Prediction Tool')
 st.write("Công cụ tương tác này cho phép bạn nhập các đặc điểm của sinh viên dựa trên mô tả tập dữ liệu được cung cấp. Nó mô phỏng cách các mô hình máy học có thể dự đoán rủi ro bỏ học dựa trên các feature đặc trưng của chúng.")
 
 # Dropdown and input fields for the dataset description
-major = st.selectbox('Bạn đang học Chuyên ngành gì?', range(1, 70))
-major_change = st.radio('Bạn có chuyển ngành khi nhập học không?', 
-                            ('Không, đây là chuyên ngành tôi đăng ký.',
-                             'Có, tôi đã chuyển ngành lúc nhập học.',
-                             'Có, tôi đã chuyển ngành khi học hết năm 1.'))
-age = st.slider('Bạn bao nhiêu tuổi?', 16,100,16)
-gender = st.radio('Giới tính ?', ('Nam', 'Nữ'))
-ethnicity = st.radio('Dân Tộc?', ('Kinh', 'Khác'))
-language = st.radio('Ngôn ngữ chính của Bạn là gì?', ('Tiếng Việt', 'Tiếng Anh', 'Khác'))
-financial_situation = st.radio('Tình hình tài chính gia đình Bạn thế nào?', ('Không tốt', 'Tốt', 'Khá tốt'))
-father_education = st.radio('Trình độ học vấn của Bố bạn là gì?', ('Sau Đại Học', 'Đại Học', 'Cao Đẳng', 'Thấp hơn'))
-mother_education = st.radio('Trình độ học vấn của Mẹ bạn là gì?', ('Sau Đại Học', 'Đại Học', 'Cao Đẳng', 'Thấp hơn'))
-mother_occupation = st.radio('Nghề nghiệp của Mẹ bạn là gì?', 
-                                  ('Nghỉ Hưu', 'Nội trợ', 'Công chức nhà nước', 'Kinh doanh', 'Lao động tự do', 'Khác'))
-father_occupation = st.radio('Nghề nghiệp của Bố bạn là gì?', 
-                                  ('Nghỉ Hưu', 'Nội trợ', 'Công chức nhà nước', 'Kinh doanh', 'Lao động tự do', 'Khác'))
-mental_health_status = st.radio('Tình trạng sức khỏe tâm thần của Bạn hiện giờ thế nào ?', ('Tốt', 'Không tốt'))
-physical_health_status = st.radio('Tình trạng sức khỏe thể chất của Bạn hiện giờ thế nào ?', ('Tốt', 'Không tốt'))
-family_support = st.radio('Gia đình có ủng hộ ngành Bạn đang học không?', ('Có', 'Không'))
-family_financial_support = st.radio('Gia đình có hỗ trợ cho Bạn không?', ('Có', 'Không'))
-peer_support = st.radio('Bạn có nhóm bạn cùng hỗ trợ nhau học tập hoặc hỗ trợ nhau trong cuộc sống không?', ('Có', 'Không'))
-academic_activities = st.radio('Bạn từng tham gia hoạt động học thuật nào chưa ?', ('Có', 'Chưa bao giờ.'))
-club_activities = st.radio('Bạn có tham gia sinh hoạt câu lạc bộ nào không ?', ('Có', 'Không'))
-part_time_job = st.radio('Bạn có đi làm thêm không ?', ('Có', 'Không'))
-# For the input text fields, we'll use placeholders as an example to simplify
-part_time_job_details = st.text_input('Công việc làm thêm của bạn là gì ?')
-part_time_hours = st.text_input('Tổng thời gian bạn dành cho công việc làm thêm là bao nhiêu giờ một ngày ?')
-part_time_income = st.text_input('Thu nhập từ công việc làm thêm là bao nhiêu ?')
-internet_usage_for_study = st.radio('Bạn có sử dụng máy tính và internet để phục vụ việc học của mình không?', ('Có', 'Không'))
-online_tools_usage = st.radio('Bạn có sử dụng các công cụ trực tuyến để phục vụ việc học tập của mình không?', ('Có', 'Không'))
-social_media_time = st.radio('Thời gian Bạn dành cho các mạng xã hội như Facebook, Tiktok... mỗi ngày là bao nhiêu?',
-                             ('Nhiều hơn 2 tiếng', 'Ít hơn 2 tiếng', 'Trung bình 10 - 30 phút tôi kiểm tra một lần.', 'Tôi không dùng thường xuyên, ít hơn 30\' mỗi ngày.'))
-facility_quality = st.radio('Bạn đánh giá thế nào về cơ sở vật chất của Trường?', ('Rất tốt', 'Tốt', 'Chưa tốt'))
-teaching_quality = st.radio('Bạn đánh giá thế nào về chất lượng giảng dạy của Giảng viên ?', ('Rất tốt', 'Tốt', 'Chưa hài lòng'))
-recent_life_event = st.radio('Trong thời gian gần đây Bạn có gặp biến cố gì lớn trong cuộc sống không ?', ('Không', 'Có'))
-local_economic_condition = st.radio('Điều kiện kinh tế nơi Bạn sống tốt không?', ('Tốt', 'Chưa tốt'))
-local_cultural_level = st.radio('Trình độ văn hóa, văn minh nơi bạn sống thế nào?', ('Cao', 'Trung Bình', 'Còn thấp'))
-continuing_education = st.radio('Bạn có tiếp tục học ở trường không ?', ('Có', 'Không', 'Đang cân nhắc thêm'))
+# major = st.selectbox('Bạn đang học Chuyên ngành gì?', range(1, 70))
+# major_change = st.radio('Bạn có chuyển ngành khi nhập học không?', 
+#                             ('Không, đây là chuyên ngành tôi đăng ký.',
+#                              'Có, tôi đã chuyển ngành lúc nhập học.',
+#                              'Có, tôi đã chuyển ngành khi học hết năm 1.'))
+# age = st.slider('Bạn bao nhiêu tuổi?', 16,100,16)
+# gender = st.radio('Giới tính ?', ('Nam', 'Nữ'))
+# ethnicity = st.radio('Dân Tộc?', ('Kinh', 'Khác'))
+# language = st.radio('Ngôn ngữ chính của Bạn là gì?', ('Tiếng Việt', 'Tiếng Anh', 'Khác'))
+# financial_situation = st.radio('Tình hình tài chính gia đình Bạn thế nào?', ('Không tốt', 'Tốt', 'Khá tốt'))
+# father_education = st.radio('Trình độ học vấn của Bố bạn là gì?', ('Sau Đại Học', 'Đại Học', 'Cao Đẳng', 'Thấp hơn'))
+# mother_education = st.radio('Trình độ học vấn của Mẹ bạn là gì?', ('Sau Đại Học', 'Đại Học', 'Cao Đẳng', 'Thấp hơn'))
+# mother_occupation = st.radio('Nghề nghiệp của Mẹ bạn là gì?', 
+#                                   ('Nghỉ Hưu', 'Nội trợ', 'Công chức nhà nước', 'Kinh doanh', 'Lao động tự do', 'Khác'))
+# father_occupation = st.radio('Nghề nghiệp của Bố bạn là gì?', 
+#                                   ('Nghỉ Hưu', 'Nội trợ', 'Công chức nhà nước', 'Kinh doanh', 'Lao động tự do', 'Khác'))
+# mental_health_status = st.radio('Tình trạng sức khỏe tâm thần của Bạn hiện giờ thế nào ?', ('Tốt', 'Không tốt'))
+# physical_health_status = st.radio('Tình trạng sức khỏe thể chất của Bạn hiện giờ thế nào ?', ('Tốt', 'Không tốt'))
+# family_support = st.radio('Gia đình có ủng hộ ngành Bạn đang học không?', ('Có', 'Không'))
+# family_financial_support = st.radio('Gia đình có hỗ trợ cho Bạn không?', ('Có', 'Không'))
+# peer_support = st.radio('Bạn có nhóm bạn cùng hỗ trợ nhau học tập hoặc hỗ trợ nhau trong cuộc sống không?', ('Có', 'Không'))
+# academic_activities = st.radio('Bạn từng tham gia hoạt động học thuật nào chưa ?', ('Có', 'Chưa bao giờ.'))
+# club_activities = st.radio('Bạn có tham gia sinh hoạt câu lạc bộ nào không ?', ('Có', 'Không'))
+# part_time_job = st.radio('Bạn có đi làm thêm không ?', ('Có', 'Không'))
+# # For the input text fields, we'll use placeholders as an example to simplify
+# part_time_job_details = st.text_input('Công việc làm thêm của bạn là gì ?')
+# part_time_hours = st.text_input('Tổng thời gian bạn dành cho công việc làm thêm là bao nhiêu giờ một ngày ?')
+# part_time_income = st.text_input('Thu nhập từ công việc làm thêm là bao nhiêu ?')
+# internet_usage_for_study = st.radio('Bạn có sử dụng máy tính và internet để phục vụ việc học của mình không?', ('Có', 'Không'))
+# online_tools_usage = st.radio('Bạn có sử dụng các công cụ trực tuyến để phục vụ việc học tập của mình không?', ('Có', 'Không'))
+# social_media_time = st.radio('Thời gian Bạn dành cho các mạng xã hội như Facebook, Tiktok... mỗi ngày là bao nhiêu?',
+#                              ('Nhiều hơn 2 tiếng', 'Ít hơn 2 tiếng', 'Trung bình 10 - 30 phút tôi kiểm tra một lần.', 'Tôi không dùng thường xuyên, ít hơn 30\' mỗi ngày.'))
+# facility_quality = st.radio('Bạn đánh giá thế nào về cơ sở vật chất của Trường?', ('Rất tốt', 'Tốt', 'Chưa tốt'))
+# teaching_quality = st.radio('Bạn đánh giá thế nào về chất lượng giảng dạy của Giảng viên ?', ('Rất tốt', 'Tốt', 'Chưa hài lòng'))
+# recent_life_event = st.radio('Trong thời gian gần đây Bạn có gặp biến cố gì lớn trong cuộc sống không ?', ('Không', 'Có'))
+# local_economic_condition = st.radio('Điều kiện kinh tế nơi Bạn sống tốt không?', ('Tốt', 'Chưa tốt'))
+# local_cultural_level = st.radio('Trình độ văn hóa, văn minh nơi bạn sống thế nào?', ('Cao', 'Trung Bình', 'Còn thấp'))
+# continuing_education = st.radio('Bạn có tiếp tục học ở trường không ?', ('Có', 'Không', 'Đang cân nhắc thêm'))
 
-# Text input for multiple-choice question where users can specify reasons affecting their choices
-#survey_impact_reasons = st.text_area('Trong các câu khảo sát ở trước (Câu 1->30) thì đâu là những lý do ảnh hưởng tới lựa chọn của bạn ?')
+# # Text input for multiple-choice question where users can specify reasons affecting their choices
+# #survey_impact_reasons = st.text_area('Trong các câu khảo sát ở trước (Câu 1->30) thì đâu là những lý do ảnh hưởng tới lựa chọn của bạn ?')
 
-if st.button('Predict Dropout Risk'):
-    # Map the user inputs to the expected model input format
-    user_inputs = {
-        'col1': major,
-        'col2': {'Không, đây là chuyên ngành tôi đăng ký.': 1, 'Có, tôi đã chuyển ngành lúc nhập học.': 2, 'Có, tôi đã chuyển ngành khi học hết năm 1.': 3}[major_change],
-        'col3': age,
-        'col4': {'Nam': 1, 'Nữ': 2}[gender],
-        'col5': {'Kinh': 1, 'Khác': 2}[ethnicity],
-        'col6': {'Tiếng Việt': 1, 'Tiếng Anh': 2, 'Khác': 3}[language],
-        'col7': {'Không tốt': 1, 'Tốt': 2, 'Khá tốt': 3}[financial_situation],
-        'col8': {'Sau Đại Học': 4, 'Đại Học': 3, 'Cao Đẳng': 2, 'Thấp hơn': 1}[father_education],
-        'col9': {'Sau Đại Học': 4, 'Đại Học': 3, 'Cao Đẳng': 2, 'Thấp hơn': 1}[mother_education],
-        'col10': {'Nghỉ Hưu': 1, 'Nội trợ': 2, 'Công chức nhà nước': 3, 'Kinh doanh': 4, 'Lao động tự do': 5, 'Khác': 6}[mother_occupation],
-        'col11': {'Nghỉ Hưu': 1, 'Nội trợ': 2, 'Công chức nhà nước': 3, 'Kinh doanh': 4, 'Lao động tự do': 5, 'Khác': 6}[father_occupation],
-        'col12': {'Tốt': 1, 'Không tốt': 2}[mental_health_status],
-        'col13': {'Tốt': 1, 'Không tốt': 2}[physical_health_status],
-        'col14': {'Có': 1, 'Không': 2}[family_support],
-        'col15': {'Có': 1, 'Không': 2}[family_financial_support],
-        'col16': {'Có': 1, 'Không': 2}[peer_support],
-        'col17': {'Có': 1, 'Chưa bao giờ.': 2}[academic_activities],
-        'col18': {'Có': 1, 'Không': 2}[club_activities],
-        'col19': {'Có': 1, 'Không': 2}[part_time_job],
-        # Assuming textual inputs for 'col20', 'col21', 'col22' need specific handling based on your model
-        #'col20': part_time_job_details,  # Directly use the input string for now
-        #'col21': part_time_hours,
-        #'col22': part_time_income,
-        'col23': {'Có': 1, 'Không': 2}[internet_usage_for_study],
-        'col24': {'Có': 1, 'Không': 2}[online_tools_usage],
-        'col25': {'Nhiều hơn 2 tiếng': 1, 'Ít hơn 2 tiếng': 2, 'Trung bình 10 - 30 phút tôi kiểm tra một lần.': 3, 'Tôi không dùng thường xuyên, ít hơn 30\' mỗi ngày.': 4}[social_media_time],
-        'col26': {'Rất tốt': 3, 'Tốt': 2, 'Chưa tốt': 1}[facility_quality],
-        'col27': {'Rất tốt': 3, 'Tốt': 2, 'Chưa hài lòng': 1}[teaching_quality],
-        'col28': {'Không': 1, 'Có': 2}[recent_life_event],
-        'col29': {'Tốt': 2, 'Chưa tốt': 1}[local_economic_condition],
-        'col30': {'Cao': 3, 'Trung Bình': 2, 'Còn thấp': 1}[local_cultural_level],
-        'col31': {'Có': 3, 'Không': 1, 'Đang cân nhắc thêm': 2}[continuing_education],
-        #'col32': survey_impact_reasons,  # Assuming this is handled correctly in your model
-    }
+# if st.button('Predict Dropout Risk'):
+#     # Map the user inputs to the expected model input format
+#     user_inputs = {
+#         'col1': major,
+#         'col2': {'Không, đây là chuyên ngành tôi đăng ký.': 1, 'Có, tôi đã chuyển ngành lúc nhập học.': 2, 'Có, tôi đã chuyển ngành khi học hết năm 1.': 3}[major_change],
+#         'col3': age,
+#         'col4': {'Nam': 1, 'Nữ': 2}[gender],
+#         'col5': {'Kinh': 1, 'Khác': 2}[ethnicity],
+#         'col6': {'Tiếng Việt': 1, 'Tiếng Anh': 2, 'Khác': 3}[language],
+#         'col7': {'Không tốt': 1, 'Tốt': 2, 'Khá tốt': 3}[financial_situation],
+#         'col8': {'Sau Đại Học': 4, 'Đại Học': 3, 'Cao Đẳng': 2, 'Thấp hơn': 1}[father_education],
+#         'col9': {'Sau Đại Học': 4, 'Đại Học': 3, 'Cao Đẳng': 2, 'Thấp hơn': 1}[mother_education],
+#         'col10': {'Nghỉ Hưu': 1, 'Nội trợ': 2, 'Công chức nhà nước': 3, 'Kinh doanh': 4, 'Lao động tự do': 5, 'Khác': 6}[mother_occupation],
+#         'col11': {'Nghỉ Hưu': 1, 'Nội trợ': 2, 'Công chức nhà nước': 3, 'Kinh doanh': 4, 'Lao động tự do': 5, 'Khác': 6}[father_occupation],
+#         'col12': {'Tốt': 1, 'Không tốt': 2}[mental_health_status],
+#         'col13': {'Tốt': 1, 'Không tốt': 2}[physical_health_status],
+#         'col14': {'Có': 1, 'Không': 2}[family_support],
+#         'col15': {'Có': 1, 'Không': 2}[family_financial_support],
+#         'col16': {'Có': 1, 'Không': 2}[peer_support],
+#         'col17': {'Có': 1, 'Chưa bao giờ.': 2}[academic_activities],
+#         'col18': {'Có': 1, 'Không': 2}[club_activities],
+#         'col19': {'Có': 1, 'Không': 2}[part_time_job],
+#         # Assuming textual inputs for 'col20', 'col21', 'col22' need specific handling based on your model
+#         #'col20': part_time_job_details,  # Directly use the input string for now
+#         #'col21': part_time_hours,
+#         #'col22': part_time_income,
+#         'col23': {'Có': 1, 'Không': 2}[internet_usage_for_study],
+#         'col24': {'Có': 1, 'Không': 2}[online_tools_usage],
+#         'col25': {'Nhiều hơn 2 tiếng': 1, 'Ít hơn 2 tiếng': 2, 'Trung bình 10 - 30 phút tôi kiểm tra một lần.': 3, 'Tôi không dùng thường xuyên, ít hơn 30\' mỗi ngày.': 4}[social_media_time],
+#         'col26': {'Rất tốt': 3, 'Tốt': 2, 'Chưa tốt': 1}[facility_quality],
+#         'col27': {'Rất tốt': 3, 'Tốt': 2, 'Chưa hài lòng': 1}[teaching_quality],
+#         'col28': {'Không': 1, 'Có': 2}[recent_life_event],
+#         'col29': {'Tốt': 2, 'Chưa tốt': 1}[local_economic_condition],
+#         'col30': {'Cao': 3, 'Trung Bình': 2, 'Còn thấp': 1}[local_cultural_level],
+#         'col31': {'Có': 3, 'Không': 1, 'Đang cân nhắc thêm': 2}[continuing_education],
+#         #'col32': survey_impact_reasons,  # Assuming this is handled correctly in your model
+#     }
 
-    # Convert this dictionary into a DataFrame
-    input_df = pd.DataFrame([user_inputs])
-    st.write(input_df)
-    scaled_inputs = scaler.transform(input_df)  # Placeholder for the actual scaler used in training
+#     # Convert this dictionary into a DataFrame
+#     input_df = pd.DataFrame([user_inputs])
+#     st.write(input_df)
+#     scaled_inputs = scaler.transform(input_df)  # Placeholder for the actual scaler used in training
 
     # Load the best model
     
     # Make a prediction
-    prediction = best_model.predict(scaled_inputs)
+    # prediction = best_model.predict(scaled_inputs)
     
     # Display the prediction result
-    st.write(f"Dựa vào dữ liệu được cung cấp ở trên, thì mức độ rủi ro mà sinh viên này bỏ học là: {'**Thấp**' if prediction[0] == 1 else '**Cao**'}")
+    # st.write(f"Dựa vào dữ liệu được cung cấp ở trên, thì mức độ rủi ro mà sinh viên này bỏ học là: {'**Thấp**' if prediction[0] == 1 else '**Cao**'}")
     
+# Title and Introduction
+st.title('Dự đoán rủi ro Sinh viên Bỏ học thông qua Máy học')
+st.write("Việc dự đoán rủi ro sinh viên bỏ học là vô cùng quan trọng đối với các cơ sở giáo dục nhằm nâng cao tỷ lệ giữ chân sinh viên.")
+
+# Uploading the CSV file
+uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+if uploaded_file is not None:
+    data = pd.read_csv(uploaded_file)
+    st.write("Here's the first five entries of your file:")
+    st.write(data.head())
+
+    # Assuming 'data' needs some preprocessing and model is already trained and saved (you can load model here)
+    # For demo, using a placeholder for model prediction
+    # You will need to replace this with actual model loading and prediction logic
+    # Placeholder: randomly assign dropout prediction
+    np.random.seed(42)
+    data['prediction'] = np.random.choice(['dropout', 'continue'], size=len(data))
+
+    # Display the predictions in the table
+    st.write("Predictions:")
+    st.dataframe(data[['StudentId', 'prediction']])  # Assuming 'student_id' column exists
+
+    # Display summary statistics
+    dropout_rate = np.mean(data['prediction'] == 'dropout')
+    continue_rate = np.mean(data['prediction'] == 'continue')
+    st.write(f"Percentage of students predicted to dropout: {dropout_rate * 100:.2f}%")
+    st.write(f"Percentage of students predicted to continue: {continue_rate * 100:.2f}%")
+
 st.header('Feedback')
 st.write('Bạn thấy dự đoán bị sai? vui lòng phản hồi ở dưới :).')
 
