@@ -26,6 +26,18 @@ Trang web được sinh ra để so sánh bốn kỹ thuật máy học— Suppe
 def prepare_data_and_evaluate_models():
     data = pd.read_csv('MYResult.csv')
     
+        # Check for NaN values in each column
+    nan_columns = data.isnull().sum()
+    print("Number of NaN values in each column:\n", nan_columns)
+
+    # Filter out columns with any NaN values
+    columns_with_nan = nan_columns[nan_columns > 0].index.tolist()
+    print("Columns with NaN values:", columns_with_nan)
+
+    # Locate rows where any cell in each row has NaN
+    nan_rows = data[data.isnull().any(axis=1)]
+    print("Rows with NaN values:\n", nan_rows)
+
     # Display the first few rows of the dataframe to understand its structure
     data.head()
     
