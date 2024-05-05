@@ -24,7 +24,7 @@ Trang web được sinh ra để so sánh bốn kỹ thuật máy học— Suppe
 
 @st.cache_data
 def prepare_data_and_evaluate_models():
-    data = pd.read_csv('D:\\WorknStudy\\DoAnThue\\AnhThuan\\MYResult.csv')
+    data = pd.read_csv('MYResult.csv')
     
     # Display the first few rows of the dataframe to understand its structure
     data.head()
